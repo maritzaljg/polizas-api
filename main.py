@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import servicios
-from config import obtener_settings
+from config import Settings, obtener_settings
 from database import get_db
 from esquemas import (
     PolizaActualizacion,
@@ -51,8 +51,13 @@ def salud(db: Session = Depends(get_db)):
 
 
 @app.post("/polizas", response_model=PolizaSalida, status_code=status.HTTP_201_CREATED)
-def crear_poliza(datos: PolizaEntrada, db: Session = Depends(get_db)):
-    """Crea una póliza con los siniestros que ya traiga declarados."""
+def crear_poliza(datos: PolizaEntrada, db: Session = Depends(get_db),
+                 config: Settings = Depends(obtener_settings)):
+    """Crea una póliza con los siniestros que ya traiga declarados.
+
+    La configuración llega inyectada con `Depends` (B2): la ruta no sabe de
+    dónde salen los secretos, solo los recibe.
+    """
     if db.scalar(select(Poliza).where(Poliza.numero == datos.numero)) is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT,
                             detail=f"ya existe una póliza con el número {datos.numero}")
@@ -64,7 +69,7 @@ def crear_poliza(datos: PolizaEntrada, db: Session = Depends(get_db)):
         prima=datos.prima,
         fecha_inicio=datos.fecha_inicio,
         fecha_fin=datos.fecha_fin,
-        token_firma=servicios.firmar(datos.numero, settings.SECRETO_FIRMA),
+        token_firma=servicios.firmar(datos.numero, config.SECRETO_FIRMA),
     )
     for s in datos.siniestros:
         poliza.siniestros.append(Siniestro(
@@ -147,7 +152,8 @@ def resumen(db: Session = Depends(get_db)):
 
 
 @app.post("/score", response_model=PuntuacionSalida)
-def puntuar(datos: PuntuacionEntrada, db: Session = Depends(get_db)):
+def puntuar(datos: PuntuacionEntrada, db: Session = Depends(get_db),
+            config: Settings = Depends(obtener_settings)):
     """Puntúa una póliza y deja registrada la predicción."""
     poliza = db.scalar(select(Poliza).where(Poliza.numero == datos.numero))
     if poliza is None:
@@ -156,7 +162,7 @@ def puntuar(datos: PuntuacionEntrada, db: Session = Depends(get_db)):
 
     puntaje = servicios.calcular_puntaje(poliza, modelo)
     prediccion = Prediccion(poliza_id=poliza.id, puntaje=puntaje,
-                            alto_riesgo=puntaje > settings.UMBRAL_ALTO_RIESGO)
+                            alto_riesgo=puntaje > config.UMBRAL_ALTO_RIESGO)
     db.add(prediccion)
     db.commit()
     return {"numero": poliza.numero, "puntaje": round(puntaje, 4),
