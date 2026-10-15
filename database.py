@@ -1,16 +1,44 @@
-"""Conexión a la base de datos."""
-from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
+"""Conexión a la base de datos y sesión por petición (B3, B4)."""
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-import config
+from config import obtener_settings
 
 
 class Base(DeclarativeBase):
     pass
 
 
-engine = create_engine(config.DATABASE_URL, connect_args={"check_same_thread": False})
+settings = obtener_settings()
+
+engine = create_engine(
+    settings.DATABASE_URL,
+    connect_args={"check_same_thread": False} if settings.DATABASE_URL.startswith("sqlite") else {},
+)
+
 SessionLocal = sessionmaker(bind=engine, autoflush=False)
 
-# Una sola sesión para todo el servicio: se abre al arrancar y se reutiliza.
-sesion = SessionLocal()
+
+@event.listens_for(engine, "connect")
+def _activar_claves_foraneas(conexion, _registro):
+    """SQLite ignora las claves foráneas salvo que se pidan en cada conexión (B4).
+
+    Sin esto se pueden insertar siniestros que apuntan a pólizas inexistentes:
+    la fila queda huérfana y la base no se queja.
+    """
+    cursor = conexion.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
+
+
+def get_db() -> Session:
+    """Entrega una sesión por petición y la cierra al terminar (B3).
+
+    Antes había una única sesión de módulo compartida por todo el servicio: si
+    una petición la dejaba en estado de error, las siguientes fallaban también.
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
