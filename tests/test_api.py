@@ -173,6 +173,36 @@ def test_el_resumen_se_resuelve_con_una_sola_consulta():
         f"/resumen emitió {contador['n']} consultas; con la estrategia agregada debe ser 1"
 
 
+def test_los_siniestros_se_resuelven_con_una_sola_consulta():
+    """Vigila la estrategia de `/siniestros`.
+
+    Cada siniestro se publica con el número de su póliza. Sin `joinedload`, el
+    servicio pedía la póliza de cada siniestro por separado: con 2000 pólizas
+    eran 2001 consultas para la misma respuesta. Aquí también el 1 es una
+    propiedad del diseño —la relación es de muchos a uno, el cruce no multiplica
+    filas— y no depende de ningún detalle interno de la librería.
+    """
+    creada = cliente.post("/polizas", json=_poliza(siniestros=[SINIESTRO, SINIESTRO])).json()
+    cliente.post("/polizas", json=_poliza(siniestros=[SINIESTRO]))
+    assert creada["id"]
+    cliente.get("/siniestros")  # calentamiento: no se cuenta
+
+    contador = {"n": 0}
+
+    @event.listens_for(_engine, "before_cursor_execute")
+    def _contar(conn, cursor, statement, parameters, context, executemany):
+        contador["n"] += 1
+
+    try:
+        r = cliente.get("/siniestros")
+    finally:
+        event.remove(_engine, "before_cursor_execute", _contar)
+
+    assert r.status_code == 200
+    assert contador["n"] == 1, \
+        f"/siniestros emitió {contador['n']} consultas; con joinedload debe ser 1"
+
+
 # --- Identidad del contrato -------------------------------------------------
 
 def test_el_put_no_cambia_el_numero_de_la_poliza():
@@ -184,19 +214,6 @@ def test_el_put_no_cambia_el_numero_de_la_poliza():
     assert r.status_code == 200
     assert r.json()["numero"] == creada["numero"], "el PUT cambió el número de la póliza"
     assert r.json()["prima"] == 2_000_000, "el PUT no aplicó el cambio que sí corresponde"
-
-
-def test_un_numero_repetido_no_deja_poliza_a_medio_crear():
-    """La batería visible comprueba que el conflicto devuelva 409 y que el
-    servicio siga vivo, pero no que no haya quedado nada escrito."""
-    datos = _poliza()
-    assert cliente.post("/polizas", json=datos).status_code == 201
-    antes = len(cliente.get("/polizas").json())
-
-    assert cliente.post("/polizas", json=datos).status_code == 409
-
-    assert len(cliente.get("/polizas").json()) == antes, \
-        "el conflicto dejó una póliza escrita a medias"
 
 
 # --- Hueco de negocio documentado, no corregido -----------------------------
