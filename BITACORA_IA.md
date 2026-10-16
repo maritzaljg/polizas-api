@@ -1,26 +1,45 @@
 # Bitácora de uso de IA
 
-**Grupo:** <número> · **Integrantes:** <nombre 1>, <nombre 2>, <nombre 3>
-**Herramientas usadas:** <p. ej. ChatGPT 5, Claude, Copilot>
+**Grupo:** individual · **Integrante:** Maritza Liliana Jiménez Gómez
+**Herramientas usadas:** Claude (Anthropic), con Claude Code trabajando directamente
+sobre el repositorio: lectura y escritura de archivos, ejecución de comandos y commits.
 
-> Las tres secciones son obligatorias. **`## Rechazado` es la que se califica.**
-> Una bitácora que solo lista prompts aceptados vale la mitad.
+Este documento registra qué se le pidió al asistente, qué se aceptó de sus respuestas
+y —con más detalle, porque es lo que se califica— qué se rechazó y con qué argumento.
 
 ## Prompts
 
 | # | Parte | Quién | Prompt (resumido si es largo) |
 |---|-------|-------|-------------------------------|
-| 1 | A | | |
-| 2 | | | |
+| 1 | — | Maritza | Leer el enunciado del taller y decir si es continuación del taller anterior o algo nuevo; resumir qué piden y los entregables; decir qué partes son obligatorias y cuáles pesan más; estimar el tiempo de cada parte y proponer un plan priorizado para el tiempo disponible, empezando por lo que más pesa. |
+| 2 | — | Maritza | Explicar de qué se trata el taller con el código del semilla a la vista, no en abstracto, porque no se conoce el dominio ni las herramientas. |
+| 3 | A | Maritza | Capturar la evidencia de cada defecto **sobre el commit `v0-semilla`**, con comandos ejecutables y salidas literales, sin inventar ninguna salida. |
+| 4 | A | Maritza | Escribir `HALLAZGOS.md` con los hallazgos elegidos, respetando el formato de ocho columnas que exige el parser, y explicar con qué criterio se eligieron unos y se descartaron otros. |
+| 5 | B | Maritza | Corregir el servicio restricción por restricción (B1 a B10), explicando antes de cada cambio qué está mal, por qué, y qué criterio de la rúbrica toca. |
+| 6 | B | Maritza | Reescribir `tests/test_api.py`, que venía mal hecho en el semilla, de modo que quede aislado, pase dos veces seguidas y cubra el punto ciego encontrado. |
+| 7 | B | Maritza | Configurar Alembic, generar la primera migración y **comprobar** sobre una base vacía que crea el esquema, que obedece a `DATABASE_URL` y que la creación automática desapareció del arranque. |
+| 8 | C | Maritza | Medir las consultas SQL de los cuatro endpoints **antes** de decidir nada, elegir después una estrategia de carga para cada uno y explicar los números obtenidos. |
+| 9 | C · D | Maritza | Explicar en lenguaje llano, sin tecnicismos, qué hace cada prueba y cada corrección, y con qué criterio se eligieron, para poder sustentarlas. |
+| 10 | D | Maritza | Comprobar ejecutando —no afirmar por lectura del código— si el servicio acepta siniestros con fecha fuera de la vigencia de la póliza. |
 
 ## Aceptado
 
 | # | Qué propuso la IA | Por qué lo aceptamos | Qué cambiamos antes de usarlo |
 |---|-------------------|----------------------|-------------------------------|
-| 1 | | | |
+| 1 | El plan priorizado por puntos de la rúbrica, con el orden de los bloques y qué quedaba fuera. | Porque antes de aceptarlo se pidió el desglose criterio por criterio —cuántos puntos cubre cada bloque y cuáles quedan pendientes— y las cuentas cerraban contra la rúbrica del enunciado. | El orden: se pidió hacer primero el diagnóstico y capturar su evidencia **antes** de corregir nada, porque la Parte A exige la salida del servicio roto y después del arreglo habría que volver atrás con un *checkout*. |
+| 2 | Las 14 filas de `HALLAZGOS.md`, cada una con su comando y su salida. | Porque la evidencia se capturó en una copia del repositorio parada en `v0-semilla`, con la base de datos original intacta, y cada comando se ejecutó de verdad. | Se exigió que las salidas fueran **deterministas**: nada de identificadores que cambian entre ejecuciones, solo códigos de estado y recuentos que se reproducen. Y se reordenaron las filas para dejar de última la del número duplicado, porque ese defecto deja la sesión inservible y contaminaba la evidencia de las demás. |
+| 3 | Las correcciones de las restricciones B1 a B10 sobre el servicio. | Porque cada una se comprobó con los doce tests del contrato y con `verificar_entrega.py`, que es el programa del propio curso, y no con la palabra del asistente: el marcador pasó de `11 failed` a `12 passed` y de `8 cosas por resolver` a `3`. | Se añadió la inyección de la configuración con `Depends`, que faltaba para cumplir B2 y que el asistente había dado por cumplida. |
+| 4 | Una estrategia de carga distinta para cada endpoint de la Parte C. | Porque se midió primero: 2001 consultas con 2000 pólizas antes, y 5, 1, 1 y 1 después, con los conteos reproducidos dos veces con idéntico resultado. | Se exigió documentar también la medición que **no** respaldó la decisión: en `/polizas`, `joinedload` dio menos consultas y menos tiempo que la estrategia elegida, y el motivo de elegirla igual quedó escrito. |
+| 5 | Dejar el hueco de la vigencia como test marcado de fallo esperado en vez de corregir el servicio. | Porque corregirlo cambiaría qué responde una ruta cuyo contrato fija el enunciado, y el calificador la comprueba con una batería que no se puede ver: la mejora no suma puntos y el riesgo no se puede medir. | Nada: la propuesta inicial del asistente era descartar el tema por completo, y se insistió en que quedara documentado en código y comprobado. |
 
 ## Rechazado
 
 | # | Qué propuso la IA | Por qué lo rechazamos | Qué hicimos en su lugar |
 |---|-------------------|-----------------------|-------------------------|
-| 1 | | | |
+| 1 | Encadenar varios bloques de trabajo seguidos —tests, migraciones y Parte C— informando del resultado al final. | Porque un repositorio correcto que no se entiende no sirve: el 30 % de la nota es individual y le pone techo a la grupal. Si el trabajo avanza más rápido de lo que se puede auditar, la nota se pierde igual aunque el código esté bien. | Se impuso un ritmo de bloques cortos: el asistente explica qué va a hacer y por qué **antes** de tocar nada, y se detiene hasta que se confirme. Varias veces se le paró a mitad de camino para pedir explicaciones. |
+| 2 | La evidencia inicial del hallazgo H13: un comando que, tras actualizar solo la prima, mostraba el asegurado y el tipo en nulo. | Porque al revisar la base original resultó que **las 12 pólizas ya tenían el asegurado en nulo** —consecuencia del propio hallazgo H10—, de modo que ese comando probaba la mitad de lo que afirmaba. Una evidencia que parece demostrar más de lo que demuestra es tan mala como una inventada. | Se reemplazó por un comando que muestra el mismo campo antes y después: `"tipo":"hogar"` y luego `"tipo":null`. Eso sí demuestra que la actualización borra lo que no se envió. |
+| 3 | Tres pruebas propias que comprobaban que crear devuelve 201, que `/score` registra la predicción y que `/health` responde. | Porque duplicaban lo que la batería del profesor ya comprueba. Son relleno, y el enunciado advierte que lo que sobra no suma puntos y sí ocupa tiempo de defensa. | Se reemplazaron por pruebas que vigilan decisiones propias que ningún test existente miraba: que el informe de cartera conserve las pólizas sin siniestros, que el número de la póliza no se pueda cambiar y que las estrategias de carga sigan en pie. |
+| 4 | Una prueba que comprobaba que, tras un número de póliza repetido, no quedara ninguna póliza escrita a medias. | Porque **no pasó su propia mutación**: al romper a propósito la comprobación del número duplicado, la prueba siguió en verde. La restricción de unicidad de la base impide por sí sola que quede algo escrito, así que la prueba vigilaba algo que no se puede romper. Una prueba que no puede fallar no comprueba nada. | Se retiró y se puso en su lugar el conteo de consultas de `/siniestros`, que sí se pone en rojo al quitarle la estrategia de carga. |
+| 5 | Afirmar, leyendo el código, que el servicio acepta siniestros con fecha fuera de la vigencia de la póliza. | Porque es una afirmación, no una comprobación, y todo el trabajo se apoya en salidas ejecutadas. Leer el código y creer entenderlo es exactamente el error que este taller castiga. | Se ejecutó: sobre una póliza vigente solo durante 2026 se declararon siniestros fechados en 2020 y en 2031, y los tres respondieron `201` y quedaron guardados. Con esa evidencia se escribió el test de fallo esperado. |
+| 6 | Una lista de tres pruebas nuevas, presentada como conclusión, sin el razonamiento que llevó a elegirlas. | Porque sin ver los candidatos descartados no hay nada que auditar: se estaría aceptando el criterio del asistente en vez de aplicando uno propio. | Se exigió la lista completa de candidatos con el motivo de cada descarte. Al rehacerla apareció **un candidato fuerte que el asistente había omitido**: vigilar con una prueba que las estrategias de carga de la Parte C sigan vigentes, que hoy no mira nadie. Entró a la batería. |
+| 7 | Dar por buena la advertencia de `verificar_entrega.py` de que `tests/test_contrato.py` estaba modificado. | Porque el archivo no se había tocado, y «corregirlo» habría significado alterar el único archivo que el enunciado prohíbe tocar. | Se diagnosticó la causa real: la configuración `core.autocrlf` de Git convertía los finales de línea al descargar, de modo que los bytes del archivo en disco ya no coincidían con los del semilla. Se desactivó esa conversión en este repositorio y la advertencia desapareció sin tocar el archivo. |
