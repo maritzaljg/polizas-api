@@ -1,8 +1,9 @@
 # Bitácora de uso de IA
 
 **Grupo:** individual · **Integrante:** Maritza Liliana Jiménez Gómez
-**Herramientas usadas:** Claude (Anthropic), con Claude Code trabajando directamente
-sobre el repositorio: lectura y escritura de archivos, ejecución de comandos y commits.
+**Herramienta usada:** Claude Opus 5 (Anthropic), mediante Claude Code trabajando
+directamente sobre el repositorio: lectura y escritura de archivos, ejecución de
+comandos y commits. No se usó ninguna otra herramienta de IA.
 
 Este documento registra qué se le pidió al asistente, qué se aceptó de sus respuestas
 y —con más detalle, porque es lo que se califica— qué se rechazó y con qué argumento.
