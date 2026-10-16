@@ -32,10 +32,77 @@ posterior responde 500 aunque sea correcta.
 
 # Parte C — Interpretación de las consultas
 
+Los conteos salen de `contar_consultas.py`, que **no se modificó**. Cada cifra se
+reprodujo dos veces con el mismo resultado: el número de consultas es determinista.
+Los tiempos solo se citan para interpretar, porque cambian de una máquina a otra.
+
+La medición «antes» corresponde al código tal como quedó al terminar la Parte B, es
+decir con todas las relaciones cargándose de forma perezosa.
+
 ## `/polizas`
+
+Antes emitía **11 consultas con 10 pólizas y 2001 con 2000**: una para traer las
+pólizas y después una más por cada póliza, al pedir sus siniestros en el momento de
+construir la respuesta. Es el problema N+1 en su forma más clara, y crece con la
+cartera: con diez mil pólizas serían diez mil una consultas para una sola petición.
+
+Con `selectinload` baja a **2 consultas con 10 pólizas y 5 con 2000**.
+
+Las 5 sorprenden si uno espera 2, y la explicación es concreta: `selectinload` trae
+los siniestros con un `IN` sobre los identificadores de las pólizas, y SQLAlchemy
+parte esa lista en tandas de 500 para no emitir una consulta desmedida. Son 2000
+pólizas, cuatro tandas, más la consulta inicial: 5. Es decir que el número ya no
+depende de cuántos siniestros haya, sino que sube de a un escalón cada 500 pólizas.
+
+También medimos la alternativa en este mismo endpoint: `joinedload` da **1 consulta
+y 367 ms**, frente a 5 consultas y 432 ms de `selectinload`. Con tres siniestros por
+póliza resultó incluso más rápido, así que la expectativa de que «traerlo todo de un
+golpe» penalizaría aquí **no se cumplió**. Aun así dejamos `selectinload`, y el
+criterio es el crecimiento: `joinedload` devuelve una fila por siniestro repitiendo
+en cada una los datos de la póliza, de modo que la respuesta engorda con los
+siniestros —con tres por póliza son 6000 filas; con cien serían 200 000—, mientras
+que `selectinload` transporta cada dato una sola vez y su número de consultas
+depende únicamente de cuántas pólizas hay.
 
 ## `/polizas/{id}`
 
+Emitía **2 consultas con 10 pólizas y 2 con 2000**: una para la póliza y otra para
+sus siniestros. Lo revelador es que el número **no cambia con el tamaño de la base**,
+y por eso este es el caso que advierte el enunciado: el código incumplía la regla de
+cargar todo de una vez y la medición dice que daba casi igual. Al pedir una sola
+póliza no hay ningún N+1 que evitar, porque no hay un bucle sobre muchas filas.
+
+Con `joinedload` baja a **1 consulta, con 10 y con 2000**. La mejora es pequeña y
+constante, pero no cuesta nada: al tratarse de una sola póliza, el `JOIN` repite sus
+datos solo tantas veces como siniestros tenga, que aquí son tres.
+
 ## `/siniestros`
 
+Antes emitía **11 consultas con 10 pólizas y 2001 con 2000**: una para traer los
+siniestros y después una por cada póliza distinta, al pedir su número. No es una
+consulta por siniestro —son 6000 siniestros y no 6001 consultas— porque la sesión
+recuerda las pólizas que ya trajo y no las vuelve a pedir.
+
+Con `joinedload` baja a **1 consulta**, con los dos tamaños. Aquí la relación va al
+revés que en `/polizas`: cada siniestro pertenece a **una sola** póliza, así que el
+`JOIN` no multiplica filas y traerlo todo junto no tiene contrapartida.
+
 ## `/resumen`
+
+Antes emitía **11 consultas con 10 pólizas y 2001 con 2000**, por el mismo motivo
+que `/polizas`: traía todas las pólizas y, por cada una, todos sus siniestros, para
+contarlos y sumarlos en Python.
+
+Con la estrategia `agregada` baja a **1 consulta**, con los dos tamaños, y el tiempo
+cae de 1368 ms a 15–23 ms.
+
+Este es el otro caso que advierte el enunciado, y es el inverso del anterior: aquí
+cargar todo de una vez **es la peor opción**, la use uno con `joinedload` o con
+`selectinload`. El resumen no necesita los siniestros: necesita cuántos son y cuánto
+suman. Pedirle eso a la base con `COUNT`, `SUM` y `GROUP BY` devuelve una fila por
+póliza y no trae ni un solo siniestro a memoria, mientras que cualquier carga
+anticipada tendría que mover 6000 filas para después descartarlas.
+
+El `outerjoin` conserva las pólizas que no tienen siniestros, que con un `JOIN`
+normal desaparecerían del resumen, y `coalesce` deja su total en cero en lugar de
+nulo.
