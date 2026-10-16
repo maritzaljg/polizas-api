@@ -1,0 +1,33 @@
+# Qué NO entra en la imagen.
+# Sin este archivo, el COPY del Dockerfile mete dentro de la imagen el entorno
+# virtual, la base de datos y el archivo de secretos. Las dos últimas cosas el
+# enunciado las prohíbe expresamente (B9).
+
+# Entorno virtual y cachés: las dependencias se instalan dentro de la imagen
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Secretos: la imagen no los lleva; se pasan al arrancar el contenedor
+.env
+
+# Bases de datos: el esquema lo crea la migración al arrancar
+*.db
+
+# Historial de git: no hace falta para ejecutar el servicio
+.git/
+.gitignore
+.dockerignore
+
+# Documentación y material de entrega: no se ejecuta
+*.md
+CONSULTAS.csv
+plantillas/
+
+# Herramientas de desarrollo y medición: no se usan dentro del contenedor
+tests/
+verificar_entrega.py
+contar_consultas.py
+sembrar_datos.py
