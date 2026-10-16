@@ -7,10 +7,10 @@ puntaje y del resumen de cartera se ocupa del negocio.
 import hashlib
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from modelos import Poliza
+from modelos import Poliza, Siniestro
 
 
 def firmar(numero: str, secreto: str) -> str:
@@ -30,13 +30,27 @@ def calcular_puntaje(poliza: Poliza, modelo) -> float:
 
 
 def resumen_cartera(db: Session) -> list[dict]:
-    """Por cada póliza: cuántos siniestros tiene y cuánto suman."""
-    polizas = db.scalars(select(Poliza).order_by(Poliza.id)).all()
+    """Por cada póliza: cuántos siniestros tiene y cuánto suman.
+
+    Estrategia `agregada` (Parte C): el resumen no necesita los siniestros, solo
+    cuántos son y cuánto suman. En vez de traerlos todos a memoria para contarlos
+    en Python, se le pide a la base que cuente y sume con `GROUP BY`. Una sola
+    consulta devuelve una fila por póliza, sin cargar ningún siniestro.
+
+    El `outerjoin` conserva las pólizas sin siniestros, que si no desaparecerían
+    del resumen; `coalesce` deja su total en 0 en lugar de nulo.
+    """
+    filas = db.execute(
+        select(
+            Poliza.numero,
+            func.count(Siniestro.id),
+            func.coalesce(func.sum(Siniestro.monto), 0.0),
+        )
+        .outerjoin(Siniestro, Siniestro.poliza_id == Poliza.id)
+        .group_by(Poliza.id)
+        .order_by(Poliza.id)
+    ).all()
     return [
-        {
-            "numero": p.numero,
-            "n_siniestros": len(p.siniestros),
-            "monto_total": round(sum(s.monto for s in p.siniestros), 2),
-        }
-        for p in polizas
+        {"numero": numero, "n_siniestros": n, "monto_total": round(total, 2)}
+        for numero, n, total in filas
     ]

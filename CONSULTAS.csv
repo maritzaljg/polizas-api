@@ -1,9 +1,9 @@
 endpoint,estrategia,n_polizas,consultas_sql,tiempo_ms
-/polizas,,10,,
-/polizas,,2000,,
-/polizas/{id},,10,,
-/polizas/{id},,2000,,
-/siniestros,,10,,
-/siniestros,,2000,,
-/resumen,,10,,
-/resumen,,2000,,
+/polizas,selectinload,10,2,3.7
+/polizas,selectinload,2000,5,431.6
+/polizas/{id},joinedload,10,1,3.0
+/polizas/{id},joinedload,2000,1,12.1
+/siniestros,joinedload,10,1,2.5
+/siniestros,joinedload,2000,1,262.5
+/resumen,agregada,10,1,2.6
+/resumen,agregada,2000,1,23.2

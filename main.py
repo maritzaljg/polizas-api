@@ -11,7 +11,7 @@ import pickle
 from fastapi import Depends, FastAPI, HTTPException, status
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 import servicios
 from config import Settings, obtener_settings
@@ -90,13 +90,28 @@ def crear_poliza(datos: PolizaEntrada, db: Session = Depends(get_db),
 
 @app.get("/polizas", response_model=list[PolizaSalida])
 def listar_polizas(db: Session = Depends(get_db)):
-    """Todas las pólizas, cada una con la lista de sus siniestros."""
-    return db.scalars(select(Poliza).order_by(Poliza.id)).all()
+    """Todas las pólizas, cada una con la lista de sus siniestros.
+
+    Estrategia `selectinload` (Parte C): una consulta trae las pólizas y otra
+    trae de golpe los siniestros de todas con un `IN`. El número de consultas no
+    depende de cuántos siniestros tenga cada póliza.
+    """
+    return db.scalars(
+        select(Poliza).options(selectinload(Poliza.siniestros)).order_by(Poliza.id)
+    ).all()
 
 
 @app.get("/polizas/{id_poliza}", response_model=PolizaSalida)
 def obtener_poliza(id_poliza: int, db: Session = Depends(get_db)):
-    poliza = db.get(Poliza, id_poliza)
+    """Una póliza con sus siniestros.
+
+    Estrategia `joinedload` (Parte C): al ser una sola póliza, el `JOIN` trae
+    la póliza y sus siniestros en una única consulta y la repetición de datos
+    se limita a unas pocas filas. `unique()` las colapsa en un solo objeto.
+    """
+    poliza = db.scalars(
+        select(Poliza).options(joinedload(Poliza.siniestros)).where(Poliza.id == id_poliza)
+    ).unique().first()
     if poliza is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"no existe la póliza {id_poliza}")
@@ -133,8 +148,15 @@ def declarar_siniestro(id_poliza: int, datos: SiniestroEntrada, db: Session = De
 
 @app.get("/siniestros", response_model=list[SiniestroConPoliza])
 def listar_siniestros(db: Session = Depends(get_db)):
-    """Todos los siniestros, cada uno con el número de su póliza."""
-    siniestros = db.scalars(select(Siniestro).order_by(Siniestro.id)).all()
+    """Todos los siniestros, cada uno con el número de su póliza.
+
+    Estrategia `joinedload` (Parte C): cada siniestro pertenece a una sola
+    póliza, así que el `JOIN` no multiplica filas y una única consulta trae
+    todo. Sin esto, cada siniestro pedía su póliza por separado.
+    """
+    siniestros = db.scalars(
+        select(Siniestro).options(joinedload(Siniestro.poliza)).order_by(Siniestro.id)
+    ).all()
     return [
         {
             "id": s.id, "poliza_id": s.poliza_id, "numero_poliza": s.poliza.numero,
@@ -171,8 +193,15 @@ def puntuar(datos: PuntuacionEntrada, db: Session = Depends(get_db),
 
 @app.get("/predicciones", response_model=list[PrediccionSalida])
 def listar_predicciones(db: Session = Depends(get_db)):
-    """Histórico de predicciones, cada una con el número de su póliza."""
-    predicciones = db.scalars(select(Prediccion).order_by(Prediccion.id)).all()
+    """Histórico de predicciones, cada una con el número de su póliza.
+
+    Misma situación que `/siniestros`: cada predicción pertenece a una póliza,
+    así que se trae con `joinedload` en la misma consulta. No es uno de los
+    cuatro endpoints que mide la Parte C, pero tenía el mismo defecto.
+    """
+    predicciones = db.scalars(
+        select(Prediccion).options(joinedload(Prediccion.poliza)).order_by(Prediccion.id)
+    ).all()
     return [
         {
             "id": p.id, "poliza_id": p.poliza_id, "numero": p.poliza.numero,
