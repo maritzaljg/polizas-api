@@ -159,6 +159,72 @@ Los tiempos solo se citan para interpretar, porque cambian de una máquina a otr
 La medición «antes» corresponde al código tal como quedó al terminar la Parte B, es
 decir con todas las relaciones cargándose de forma perezosa.
 
+## Mediciones de respaldo
+
+Los cuatro párrafos siguientes citan tres cosas además de los conteos finales: el estado
+anterior, las alternativas descartadas y el inflado de filas del `JOIN`. Las tres se
+midieron y aquí quedan los números, para que se puedan contrastar. El enunciado solo pide
+explicar los conteos que obtuvimos; esta sección es respaldo.
+
+**Las cuatro estrategias en los cuatro endpoints**, con 2000 pólizas y tres siniestros por
+póliza. Cada columna es una corrida completa de `contar_consultas.py` sobre el servicio con
+esa estrategia aplicada a los cuatro endpoints a la vez:
+
+| Endpoint | `lazy` | `selectinload` | `joinedload` | `agregada` | Elegida |
+|---|---|---|---|---|---|
+| `/polizas` | 2001 · 1262 ms | 5 · 195 ms | 1 · 181 ms | no aplicable | `selectinload` |
+| `/polizas/{id}` | 2 · 3,9 ms | 2 · 3,8 ms | 1 · 2,9 ms | no aplicable | `joinedload` |
+| `/siniestros` | 2001 · 720 ms | 5 · 238 ms | 1 · 144 ms | no aplicable | `joinedload` |
+| `/resumen` | 2001 · 1807 ms | 5 · 160 ms | 1 · 134 ms | 1 · 16 ms | `agregada` |
+
+`agregada` no aplica a los tres primeros endpoints: el contrato exige devolver la lista de
+siniestros de cada póliza, y una consulta de agregación devuelve recuentos, no listas.
+
+Dos lecturas de esta tabla sostienen las decisiones:
+
+- **En `/resumen`, `joinedload` y `agregada` emiten una sola consulta las dos, y difieren
+  en un factor de ocho en tiempo**: 134 ms contra 16 ms. El conteo de consultas, por sí
+  solo, no distingue la buena opción de la mala, porque `joinedload` trae los 6000
+  siniestros a memoria para contarlos y `agregada` no trae ninguno. Es el caso que el
+  enunciado anuncia como «seguirla da peor rendimiento».
+- **En `/polizas`, `joinedload` gana en las dos columnas** —1 consulta contra 5 y 181 ms
+  contra 195— y aun así no se eligió. El motivo está en el párrafo correspondiente y se
+  apoya en el inflado de filas, medido justo abajo.
+
+**El inflado de filas del `JOIN`**, contado sobre la base de datos que trae `v0-semilla`,
+con 12 pólizas y 24 siniestros:
+
+| Consulta | Filas que devuelve el `JOIN` | Filas que hacen falta | Factor |
+|---|---|---|---|
+| `/polizas` | 24 | 12 pólizas | ×2,0 |
+| `/siniestros` | 24 | 24 siniestros | ×1,0 |
+
+Ese factor es la razón por la que dos endpoints que devuelven los mismos datos eligen
+estrategias distintas. En `/polizas` la relación va de una póliza a muchos siniestros y el
+`JOIN` repite los datos de la póliza en cada fila, de modo que el factor sube con los
+siniestros que tenga cada una. En `/siniestros` cada siniestro pertenece a una sola póliza
+y el `JOIN` no multiplica nada: las filas que devuelve son las que hay que publicar.
+
+**Cómo se reprodujo cada columna.** El estado `lazy` se reconstruyó retirando las tres
+opciones de carga de `main.py` y devolviendo `resumen_cartera` a una versión que trae las
+pólizas y cuenta sus siniestros en Python. Las columnas `selectinload` y `joinedload` se
+obtuvieron aplicando esa misma estrategia a los cuatro endpoints, y en `/resumen` cargando
+los siniestros de forma anticipada para contarlos en Python. Tras cada corrida `main.py` y
+`servicios.py` se restauraron y se comprobó que quedaban idénticos; la batería completa
+volvió a `37 passed, 1 xfailed`.
+
+**Sobre los tiempos.** Los de esta sección y los de los párrafos siguientes salen de una
+misma tanda de mediciones y **no son reproducibles**: entre corridas en esta misma máquina,
+`/polizas` con `selectinload` ha dado entre 195 y 432 ms. Solo se citan para interpretar, y
+lo que se compara entre estrategias es el orden de magnitud, no la cifra exacta. Lo que sí
+se reproduce, y es lo que se califica, es la columna de consultas.
+
+Por eso los tiempos de esta tabla no coinciden con los de `CONSULTAS.csv`: el CSV mide el
+servicio final, con una estrategia distinta en cada endpoint, y las columnas de arriba salen
+de corridas en las que una misma estrategia se aplicó a los cuatro a la vez. **Los conteos
+de consultas sí coinciden** en los cuatro casos elegidos: 5, 1, 1 y 1 con 2000 pólizas, en
+la tabla y en el CSV.
+
 ## `/polizas`
 
 Antes emitía **11 consultas con 10 pólizas y 2001 con 2000**: una para traer las
@@ -175,7 +241,7 @@ pólizas, cuatro tandas, más la consulta inicial: 5. Es decir que el número ya
 depende de cuántos siniestros haya, sino que sube de a un escalón cada 500 pólizas.
 
 También medimos la alternativa en este mismo endpoint: `joinedload` da **1 consulta
-y 367 ms**, frente a 5 consultas y 432 ms de `selectinload`. Con tres siniestros por
+y 181 ms**, frente a 5 consultas y 195 ms de `selectinload`. Con tres siniestros por
 póliza resultó incluso más rápido, así que la expectativa de que «traerlo todo de un
 golpe» penalizaría aquí **no se cumplió**. Aun así dejamos `selectinload`, y el
 criterio es el crecimiento: `joinedload` devuelve una fila por siniestro repitiendo
@@ -214,7 +280,7 @@ que `/polizas`: traía todas las pólizas y, por cada una, todos sus siniestros,
 contarlos y sumarlos en Python.
 
 Con la estrategia `agregada` baja a **1 consulta**, con los dos tamaños, y el tiempo
-cae de 1368 ms a 15–23 ms.
+cae de 1807 ms a 16 ms.
 
 Este es el otro caso que advierte el enunciado, y es el inverso del anterior: aquí
 cargar todo de una vez **es la peor opción**, la use uno con `joinedload` o con
