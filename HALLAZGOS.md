@@ -18,7 +18,7 @@ ese defecto deja la sesión compartida inservible y cualquier petición posterio
 > de rango. Se documentan los 34 porque el docente autorizó después documentarlos todos
 > y porque el nivel máximo del criterio C3 se describe como «todos los defectos
 > hallados». Ninguna fila se incluyó sin un comando que la reproduzca, y se
-> descartaron siete candidatos que no superaban ese criterio.
+> descartaron nueve candidatos que no superaban ese criterio.
 
 **Índice**
 
