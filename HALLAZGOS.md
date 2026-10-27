@@ -2,11 +2,11 @@
 
 **Grupo:** individual · **Integrante:** Maritza Liliana Jiménez Gómez
 
-Este documento reúne los **31 defectos** encontrados en el servicio polizas-api-v0
+Este documento reúne los **34 defectos** encontrados en el servicio polizas-api-v0
 antes de las correcciones. Cada fila declara el comando que reproduce el defecto y la
 salida literal obtenida al ejecutarlo sobre el commit `v0-semilla`, en una copia del
-repositorio parada en ese commit y con la base de datos original intacta. Las 31
-salidas se volvieron a comprobar una por una antes de entregar.
+repositorio parada en ese commit y con la base de datos original intacta. Las 34
+salidas se volvieron a comprobar una por una, en el orden del documento, antes de entregar.
 
 Los hallazgos están agrupados por el tipo de problema. Dentro de cada grupo, las filas
 se ordenan dejando de último el comando de H14 —el número de póliza duplicado—, porque
@@ -15,15 +15,16 @@ ese defecto deja la sesión compartida inservible y cualquier petición posterio
 
 > **Sobre el número de hallazgos.** El enunciado publicado pedía entre 8 y 14, y
 > `verificar_entrega.py` comprueba ese rango, de modo que marcará esta tabla como fuera
-> de rango. Se documentan los 31 porque el docente autorizó después documentarlos todos
+> de rango. Se documentan los 34 porque el docente autorizó después documentarlos todos
 > y porque el nivel máximo del criterio C3 se describe como «todos los defectos
-> hallados». Ninguna fila se incluyó sin un comando que la reproduzca.
+> hallados». Ninguna fila se incluyó sin un comando que la reproduzca, y se
+> descartaron siete candidatos que no superaban ese criterio.
 
 **Índice**
 
 1. **Configuración, secretos y reproducibilidad** — 5 hallazgos: H1, H2, H15, H16, H17
 2. **Persistencia e inyección de dependencias** — 5 hallazgos: H3, H4, H18, H19, H20
-3. **Validación de la entrada** — 3 hallazgos: H10, H11, H12
+3. **Validación de la entrada** — 6 hallazgos: H10, H11, H12, H32, H33, H34
 4. **Contrato HTTP** — 9 hallazgos: H5, H6, H7, H8, H9, H13, H21, H22, H14
 5. **Pruebas** — 2 hallazgos: H23, H24
 6. **Contenedor y documentación de despliegue** — 7 hallazgos: H25, H26, H27, H28, H29, H30, H31
@@ -63,6 +64,9 @@ Lo que el servicio acepta y no debería aceptar.
 | H10 | El nombre del asegurado se guarda nulo | El validador `normalizar_asegurado` calcula el valor normalizado pero no lo devuelve, y en Pydantic v2 el valor final del campo es lo que retorna el validador; las 12 pólizas que vienen en `app.db` tienen el asegurado nulo por este motivo | M7 · 4. Validadores de campo y de modelo | `v0-semilla` | `curl -s -X POST localhost:8000/polizas -H "Content-Type: application/json" -d '{"numero":"POL-2026-90002","asegurado":"  juan  perez  ","tipo":"auto","prima":1000,"fecha_inicio":"2026-01-01","fecha_fin":"2026-12-31","siniestros":[]}' \| grep -o '"asegurado":[^,]*'` | `"asegurado":null` | El validador devuelve el valor normalizado con `return` |
 | H11 | Se acepta una póliza cuya vigencia termina antes de empezar | Ningún validador compara `fecha_fin` con `fecha_inicio`: cada fecha se valida por separado | M7 · 6. Manejo integral del error 422 | `v0-semilla` | `curl -s -o /dev/null -w "%{http_code}\n" -X POST localhost:8000/polizas -H "Content-Type: application/json" -d '{"numero":"POL-2026-90003","asegurado":"Ana Perez","tipo":"auto","prima":1000,"fecha_inicio":"2026-12-31","fecha_fin":"2026-01-01","siniestros":[]}'` | `200` | Se añade un `model_validator` que exige `fecha_fin` posterior a `fecha_inicio` y responde 422 |
 | H12 | Un siniestro anidado con monto negativo entra sin validarse | `PolizaEntrada` tipa la lista como `list[dict]`, así que Pydantic no aplica las restricciones de `SiniestroEntrada` | M7 · 5. Modelos anidados | `v0-semilla` | `curl -s -o /dev/null -w "%{http_code}\n" -X POST localhost:8000/polizas -H "Content-Type: application/json" -d '{"numero":"POL-2026-90004","asegurado":"Ana Perez","tipo":"auto","prima":1000,"fecha_inicio":"2026-01-01","fecha_fin":"2026-12-31","siniestros":[{"fecha":"2026-02-01","monto":-500,"descripcion":"monto negativo","estado":"abierto"}]}'` | `200` | La lista se tipa como `list[SiniestroEntrada]` y el monto negativo produce 422 |
+| H32 | El tipo de póliza admite cualquier texto | El campo se declara como texto libre con un límite de longitud: la descripción del propio esquema dice «auto, hogar o vida», pero nada restringe los valores, así que entran categorías que ningún informe de cartera reconoce | M7 · 3. Tipos complejos y anotaciones | `v0-semilla` | `curl -s -X POST localhost:8000/polizas -H "Content-Type: application/json" -d '{"numero":"POL-2026-70002","asegurado":"Ana Perez","tipo":"motocicleta","prima":1000,"fecha_inicio":"2026-01-01","fecha_fin":"2026-12-31","siniestros":[]}' \| grep -o '"tipo":"[^"]*"'` | `"tipo":"motocicleta"` | El campo se tipa con un conjunto cerrado de valores, de modo que cualquier otro produce 422 |
+| H33 | El estado del siniestro admite cualquier texto | Mismo problema en el esquema del siniestro: el estado por defecto es «abierto» y el dominio contempla además «pagado» y «rechazado», pero se acepta cualquier palabra y el siniestro deja de aparecer en los informes que filtran por estado | M7 · 3. Tipos complejos y anotaciones | `v0-semilla` | `curl -s -X POST localhost:8000/polizas/1/siniestros -H "Content-Type: application/json" -d '{"fecha":"2026-03-01","monto":500,"descripcion":"Choque leve","estado":"anulado"}' \| grep -o '"estado":"[^"]*"'` | `"estado":"anulado"` | El estado se tipa con un conjunto cerrado de valores |
+| H34 | El número de póliza no respeta el formato que el propio código documenta | `esquemas.py` describe el campo como «Formato POL-AAAA-NNNNN» pero solo comprueba la longitud, de modo que un número que no identifica nada entra igual y queda como referencia del contrato | M7 · 4. Validadores de campo y de modelo | `v0-semilla` | `grep -n "Formato POL" esquemas.py; curl -s -o /dev/null -w "HTTP %{http_code}\n" -X POST localhost:8000/polizas -H "Content-Type: application/json" -d '{"numero":"12345678","asegurado":"Ana Perez","tipo":"auto","prima":1000,"fecha_inicio":"2026-01-01","fecha_fin":"2026-12-31","siniestros":[]}'` | `16:    numero: str = Field(min_length=8, max_length=20, description="Formato POL-AAAA-NNNNN")`<br>`HTTP 200` | El formato se exige con un patrón en `Field`, de modo que un número que no lo cumple produce 422 |
 
 ## 4 · Contrato HTTP
 
