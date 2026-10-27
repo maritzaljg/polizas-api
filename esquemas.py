@@ -5,9 +5,14 @@ Salida: qué devuelve. Están separados a propósito, porque hay campos que se
 guardan pero no se publican, como `token_firma`.
 """
 from datetime import date, datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+# Conjuntos cerrados del dominio. Antes eran texto libre: se aceptaba cualquier
+# palabra, de modo que entraban tipos y estados que ningún informe reconoce.
+TipoPoliza = Literal["auto", "hogar", "vida"]
+EstadoSiniestro = Literal["abierto", "pagado", "rechazado"]
 
 
 # --- Entrada ---------------------------------------------------------------
@@ -18,15 +23,21 @@ class SiniestroEntrada(BaseModel):
     fecha: date
     monto: float = Field(gt=0, description="Monto reclamado, en pesos")
     descripcion: str = Field(min_length=3, max_length=200)
-    estado: str = "abierto"
+    estado: EstadoSiniestro = "abierto"
 
 
 class PolizaEntrada(BaseModel):
     """Datos para crear una póliza, con los siniestros que ya tenga."""
 
-    numero: str = Field(min_length=8, max_length=20, description="Formato POL-AAAA-NNNNN")
+    # La descripción original prometía el formato «POL-AAAA-NNNNN» y no lo exigía.
+    # No se añade un patrón que lo imponga a propósito: la batería del contrato
+    # crea pólizas como POL-CT-A1B2C3 y la herramienta de siembra del taller usa
+    # POL-C-00001, de modo que exigir ese formato rompería el contrato fijado.
+    # La corrección es dejar de documentar una regla que no se puede aplicar.
+    numero: str = Field(min_length=8, max_length=20,
+                        description="Identificador del contrato, entre 8 y 20 caracteres")
     asegurado: str = Field(min_length=3, max_length=80)
-    tipo: str = Field(description="auto, hogar o vida")
+    tipo: TipoPoliza = Field(description="auto, hogar o vida")
     prima: float = Field(gt=0, description="Prima anual, en pesos")
     fecha_inicio: date
     fecha_fin: date
@@ -56,7 +67,7 @@ class PolizaActualizacion(BaseModel):
     """Actualización parcial: solo viaja lo que se quiere cambiar."""
 
     asegurado: Optional[str] = Field(default=None, min_length=3, max_length=80)
-    tipo: Optional[str] = None
+    tipo: Optional[TipoPoliza] = None
     prima: Optional[float] = Field(default=None, gt=0)
     fecha_fin: Optional[date] = None
 

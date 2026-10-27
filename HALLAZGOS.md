@@ -109,6 +109,38 @@ La imagen y las instrucciones con las que otra persona pondría esto a correr.
 
 ---
 
+## Candidatos descartados, y por qué
+
+Estos se consideraron y **no** entraron en la tabla. Se dejan escritos porque la
+decisión de descartarlos forma parte del diagnóstico: el enunciado advierte que una
+fila que no corresponda a un defecto real resta la mitad de lo que suma una correcta.
+
+**Por compartir causa con una fila que ya está**
+
+| Candidato | Por qué se descarta |
+|---|---|
+| Las 12 pólizas de `app.db` tienen el asegurado nulo | Es la **consecuencia** de H10, el validador que no devuelve el valor, no un defecto aparte. Se incorporó como evidencia adicional en la causa de H10 |
+| Ninguna ruta declara `response_model` | Es exactamente la causa que ya declara H7. Dos filas para un solo problema |
+| El código de firma es adivinable | Se calcula con una fórmula pública a partir de una clave que está en el repositorio: es la consecuencia de H1 y H7 juntos. Vale como explicación, no como fila |
+| `--reload` aparece también en el README línea 22 y en `main.py` línea 135 | Es el mismo defecto de H31 en otros dos renglones |
+
+**Por no incumplir ninguna regla del enunciado ni tener respaldo en el material**
+
+| Candidato | Por qué se descarta |
+|---|---|
+| `/polizas`, `/siniestros` y `/resumen` emiten una consulta por póliza | Es un defecto real —13 consultas con 12 pólizas—, pero ninguna sección de los módulos 6 a 11 trata la carga de relaciones, de modo que la cita sería forzada. Además se califica aparte, en la Parte C, que es donde se documenta |
+| Los listados no admiten paginación | Devolver 2000 pólizas en una sola respuesta es discutible, pero el enunciado no lo exige en ninguna regla |
+| `creado_en` guarda la hora local del servidor y no una hora universal | Real, pero menor aquí y sin regla ni sección que lo respalde |
+| Las columnas que enlazan las tablas no tienen índice | Afecta al rendimiento con muchos registros; mismo motivo que el anterior |
+
+**Por no superar la comprobación**
+
+| Candidato | Qué se midió |
+|---|---|
+| Los montos se guardan con decimales de coma flotante | La sospecha era que los totales acumularan errores de centavos. Se creó una póliza con siniestros de 5500.10, 3200.20 y 1100.30: la suma interna da `9800.599999999999`, pero `/resumen` redondea a dos decimales y responde `9800.6`, que es correcto. El defecto existe en el cálculo y queda tapado en la respuesta, así que **no se pudo demostrar un resultado incorrecto** y no se documenta |
+
+---
+
 # Parte C — Interpretación de las consultas
 
 Los conteos salen de `contar_consultas.py`, que **no se modificó**. Cada cifra se
