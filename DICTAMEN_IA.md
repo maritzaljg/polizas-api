@@ -100,6 +100,36 @@ corrida 4: 1 failed, 16 passed
 FAILED tests/test_ia_corregido.py::test_cada_tipo_de_poliza_se_crea_igual[vida-4750000]
 ```
 
+La comprobación se repitió el 31 de octubre sobre el repositorio ya terminado, con la misma
+mutación, y la segunda tanda muestra la consecuencia práctica del defecto mejor que la
+primera: en una de las seis corridas la batería de la IA informó `6 passed`, es decir **dio
+por sano un servicio incapaz de crear pólizas de vida**. El sorteo no le entregó ninguna
+póliza de ese tipo, así que nunca probó el caso roto. El defecto no consiste en que la
+batería falle: consiste en que su veredicto depende del azar, y un veredicto así no
+distingue un servicio sano de uno averiado.
+
+```
+# ia_tests_propuesta.py, segunda tanda, la MISMA mutación
+corrida 1: 2 failed, 4 passed
+corrida 2: 1 failed, 5 passed
+corrida 3: 3 failed, 3 passed
+corrida 4: 6 passed            <-- el servicio roto pasa por sano
+corrida 5: 2 failed, 4 passed
+corrida 6: 2 failed, 4 passed
+```
+
+```
+# tests/test_ia_corregido.py, segunda tanda, la MISMA mutación
+corrida 1: 1 failed, 16 passed
+corrida 2: 1 failed, 16 passed
+corrida 3: 1 failed, 16 passed
+corrida 4: 1 failed, 16 passed
+```
+
+Cuatro valores distintos en la batería sorteada —0, 1, 2 y 3 fallos— frente a un único valor
+en la enumerada, en las dos tandas. Es el mismo resultado por dos caminos: lo que cambia
+entre corridas no es el servicio, es qué casos llegó a mirar la batería.
+
 - **Corrección**: los datos pasan a ser fijos y explícitos, y la variedad se consigue **enumerando** los casos con `pytest.mark.parametrize` en vez de sorteándolos. Los tres tipos de póliza se prueban los tres, siempre, y el nombre del caso que falla aparece en la salida.
 
 ---
@@ -118,3 +148,18 @@ quita, un validador que acepta lo que no debe». Se hicieron las tres.
 
 En las tres, el servicio se devolvió a su estado original y la batería completa del
 repositorio volvió a `37 passed, 1 xfailed`.
+
+**Re-verificación del 31 de octubre.** Las cuatro demostraciones de este dictamen se
+repitieron sobre el repositorio terminado, y las cuatro se reprodujeron:
+
+| Demostración | Resultado al repetirla |
+|---|---|
+| La batería de la IA escribe en la base real | `app.db` pasó de `c05fbcd8247ca2e7` a `7254ae5b26f6dcc1`; la corregida la dejó con la misma huella con que la encontró |
+| El 404 que deja de devolverse | la de la IA, `6 passed`; la corregida, `1 failed` |
+| El `commit` reemplazado por un `flush` | la de la IA, `1 failed`; la corregida, `5 failed` |
+| El validador de fechas desactivado | la de la IA, `6 passed`; la corregida, `1 failed` |
+| El fallo que afecta a un solo tipo de póliza | la de la IA, cuatro valores distintos en seis corridas, una de ellas `6 passed`; la corregida, `1 failed` las cuatro veces |
+
+Tras cada mutación `main.py` y `esquemas.py` se restauraron **byte a byte** —con copia de
+archivo, no reescribiendo el texto, para no alterar los finales de línea— y se comprobó que
+quedaban idénticos. La batería completa volvió a `37 passed, 1 xfailed`.
