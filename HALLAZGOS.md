@@ -118,6 +118,29 @@ La imagen y las instrucciones con las que otra persona pondría esto a correr.
 
 ---
 
+**Comprobado ejecutando, no solo leyendo.** Las correcciones de H25 a H31 se verificaron
+construyendo la imagen y levantandola: `docker build -t polizas-api .` y
+`docker run -d -p 8000:8000 --name polizas polizas-api`. Con el contenedor en marcha:
+
+| Lo que exige B9 | Lo que se obtuvo |
+|---|---|
+| `docker run -p 8000:8000` responde en `/health` **desde el host** | `{"estado":"ok","base_de_datos":"ok"}`, HTTP 200 |
+| Usuario sin privilegios | `uid=1000(servicio) gid=1000(servicio)` |
+| Imagen base fijada | `Python 3.11.9` dentro del contenedor |
+| `HEALTHCHECK` | declarado, y Docker reporta el contenedor como `healthy` |
+| `CMD` sin `--reload` y con `--host 0.0.0.0` | `sh -c alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000` |
+| Multietapa | dos `FROM`, y la cache de `pip` no queda en la imagen final |
+| `.dockerignore` | `.env`, `app.db`, `venv/` y `tests/` ausentes dentro de `/app`; `main.py`, `modelo.pkl`, `alembic/` y `alembic.ini` presentes |
+
+La migracion se aplica sola al arrancar el contenedor: crea `/app/datos/polizas.db`, propiedad
+del usuario sin privilegios, sobre una base que la imagen no lleva dentro. Una prueba de
+extremo a extremo contra el contenedor devolvio 201 al crear, el asegurado normalizado, ningun
+`token_firma` en la respuesta, 422 ante un tipo fuera del conjunto, 409 ante un numero
+repetido, 404 ante una poliza inexistente, y el resumen agregado correcto.
+
+Con Docker disponible, `verificar_entrega.py` cambia el aviso «Docker no disponible en esta
+maquina» por `OK docker build construye`.
+
 ## Candidatos descartados, y por qué
 
 Estos se consideraron y **no** entraron en la tabla. Se dejan escritos porque la
